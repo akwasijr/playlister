@@ -223,6 +223,9 @@
 
         // Step 1: Handle Spotify authentication redirect
         window.addEventListener('load', () => {
+            console.log('Window loaded. Current URL:', window.location.href); // New log
+            console.log('Raw hash on load:', window.location.hash); // New log
+
             const hash = window.location.hash
                 .substring(1)
                 .split('&')
@@ -234,23 +237,28 @@
                     return initial;
                 }, {});
 
+            console.log('Parsed hash object:', hash); // New log
+
             window.location.hash = ''; // Clear hash from URL
 
             if (hash.access_token) {
                 accessToken = hash.access_token;
+                console.log('Access Token extracted:', accessToken); // New log
                 currentPage = 'create';
+                console.log('Current page set to:', currentPage); // New log
                 fetchUserProfile(accessToken);
             } else if (!accessToken) {
                 currentPage = 'auth'; // Ensure we are on auth if no token
+                console.log('No access token in hash. Current page set to:', currentPage); // New log
             }
             renderPage();
         });
 
         // Event Listeners
         loginButton.addEventListener('click', () => {
-            console.log('Login button clicked!'); // Added log
+            console.log('Login button clicked!');
             const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes.join(' '))}&response_type=token&show_dialog=true`;
-            console.log('Attempting to redirect to Spotify auth URL:', authUrl); // Added log
+            console.log('Attempting to redirect to Spotify auth URL:', authUrl);
             window.location = authUrl;
         });
 
