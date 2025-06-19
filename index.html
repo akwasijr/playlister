@@ -118,7 +118,7 @@
     <script>
         // Spotify API configuration
         const clientId = '11dbe168b3564e6cb3dacfc502915a71';
-        const redirectUri = 'https://playlister-dct.pages.dev/'; // Updated to your Cloudflare Pages URL
+        const redirectUri = 'https://playlister-dct.pages.dev/'; // Your Cloudflare Pages URL
         const scopes = ['user-read-private', 'user-read-email', 'playlist-modify-public', 'playlist-modify-private', 'user-read-playback-state'];
 
         // Global state variables
@@ -248,7 +248,9 @@
 
         // Event Listeners
         loginButton.addEventListener('click', () => {
+            console.log('Login button clicked!'); // Added log
             const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes.join(' '))}&response_type=token&show_dialog=true`;
+            console.log('Attempting to redirect to Spotify auth URL:', authUrl); // Added log
             window.location = authUrl;
         });
 
