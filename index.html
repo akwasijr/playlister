@@ -3,10 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spotify Playlist Maker</title>
-    <!-- Tailwind CSS CDN for styling -->
+    <title>AI Spotify Playlist Maker</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts - Inter for a modern look -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         /* Custom styles for the body and root container, mimicking Spotify's dark theme */
@@ -63,23 +61,20 @@
 <body>
     <div id="app-container">
         <h1 class="text-4xl font-bold text-center text-[#1DB954] mb-8">
-            Spotify Playlist Maker
+            AI Spotify Playlist Maker
         </h1>
 
-        <!-- Message Box Container -->
         <div id="message-box-container"></div>
 
-        <!-- Spotify Login View -->
         <div id="spotify-login-view" class="text-center">
             <p class="mb-6 text-lg text-gray-300">
-                Please log in with your Spotify account to create playlists.
+                Please log in with your Spotify account to create AI-powered playlists.
             </p>
             <button id="login-spotify-btn" class="bg-[#1DB954] text-white font-semibold py-3 px-8 rounded-full shadow-lg hover:bg-[#1ed760] transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[#1DB954] focus:ring-opacity-50">
                 Login with Spotify
             </button>
         </div>
 
-        <!-- Authenticated Content (Hidden by default until login) -->
         <div id="authenticated-content" class="hidden">
             <div class="text-center mb-6">
                 <p class="text-lg text-gray-300">
@@ -88,46 +83,32 @@
                 <p id="firebase-user-id" class="text-sm text-gray-500 mt-1 hidden"></p>
             </div>
 
-            <!-- Input View: Where user enters playlist title and songs -->
             <div id="input-view" class="space-y-6">
                 <div>
-                    <label for="playlistTitle" class="block text-lg font-medium text-gray-300 mb-2">
-                        Playlist Title:
-                    </label>
-                    <input
-                        type="text"
-                        id="playlistTitle"
-                        placeholder="My Awesome Playlist"
-                        class="w-full p-3 bg-[#282828] border border-[#333] rounded-md text-white placeholder-gray-500 focus:ring-2 focus:ring-[#1DB954] focus:border-transparent transition duration-200"
-                    />
-                </div>
-                <div>
-                    <label for="songInput" class="block text-lg font-medium text-gray-300 mb-2">
-                        Enter Songs (one per line or comma-separated):
+                    <label for="playlistDescription" class="block text-lg font-medium text-gray-300 mb-2">
+                        Describe the playlist you want to create:
                     </label>
                     <textarea
-                        id="songInput"
-                        rows="8"
-                        placeholder="Bohemian Rhapsody - Queen&#10;Hotel California by Eagles&#10;Billie Jean, Michael Jackson"
+                        id="playlistDescription"
+                        rows="4"
+                        placeholder="e.g., Chill indie songs for a rainy Sunday afternoon, Upbeat workout hits from the 90s, Relaxing jazz for studying"
                         class="w-full p-3 bg-[#282828] border border-[#333] rounded-md text-white placeholder-gray-500 focus:ring-2 focus:ring-[#1DB954] focus:border-transparent transition duration-200 resize-y"
                     ></textarea>
                 </div>
-                <button id="parse-songs-btn" class="w-full bg-[#1DB954] text-white font-semibold py-3 px-6 rounded-full shadow-lg hover:bg-[#1ed760] transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[#1DB954] focus:ring-opacity-50">
-                    Parse Songs with AI
+                <button id="get-suggestions-btn" class="w-full bg-[#1DB954] text-white font-semibold py-3 px-6 rounded-full shadow-lg hover:bg-[#1ed760] transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[#1DB954] focus:ring-opacity-50">
+                    Get AI Song Suggestions
                 </button>
             </div>
 
-            <!-- Preview View: Displays parsed songs and Spotify search results for selection -->
             <div id="preview-view" class="space-y-6 hidden">
                 <h2 class="text-3xl font-semibold text-white mb-4 text-center">
-                    Preview Playlist: <span id="preview-playlist-title" class="text-[#1DB954]"></span>
+                    Suggested Playlist: <span id="preview-playlist-title" class="text-[#1DB954]"></span>
                 </h2>
                 <div id="parsed-songs-list" class="space-y-4 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
-                    <!-- Songs will be dynamically inserted here -->
-                </div>
+                    </div>
                 <div class="flex justify-between gap-4 mt-6 flex-wrap">
-                    <button id="back-to-input-btn" class="flex-1 min-w-[48%] bg-gray-600 text-white font-semibold py-3 px-6 rounded-full shadow-lg hover:bg-gray-700 transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-gray-600 focus:ring-opacity-50">
-                        Back to Input
+                    <button id="back-to-description-btn" class="flex-1 min-w-[48%] bg-gray-600 text-white font-semibold py-3 px-6 rounded-full shadow-lg hover:bg-gray-700 transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-gray-600 focus:ring-opacity-50">
+                        Change Description
                     </button>
                     <button id="create-playlist-btn" class="flex-1 min-w-[48%] bg-[#1DB954] text-white font-semibold py-3 px-6 rounded-full shadow-lg hover:bg-[#1ed760] transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[#1DB954] focus:ring-opacity-50">
                         Create Playlist
@@ -135,7 +116,6 @@
                 </div>
             </div>
 
-            <!-- Created View: Confirmation after playlist creation -->
             <div id="created-view" class="text-center space-y-6 hidden">
                 <h2 class="text-3xl font-bold text-[#1DB954] mb-4">
                     Playlist Created Successfully!
@@ -151,7 +131,6 @@
                 </button>
             </div>
 
-            <!-- Auth Pending View: During Spotify OAuth callback processing -->
             <div id="auth-pending-view" class="text-center space-y-4 hidden">
                 <svg class="animate-spin h-10 w-10 text-[#1DB954] mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -164,7 +143,6 @@
         </div>
     </div>
 
-    <!-- Firebase Libraries -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -222,8 +200,8 @@
     <script>
         // --- Global State Variables ---
         let currentView = 'input'; // 'input', 'preview', 'created', 'auth_pending'
-        let playlistTitle = '';
-        let songInput = '';
+        let playlistDescription = ''; // New: stores user's playlist description
+        let playlistTitle = ''; // Suggested by AI
         let parsedSongs = []; // [{ artist: "...", title: "...", spotifyResults: [], selectedTrack: {} }]
         let isLoading = false;
         let spotifyProfile = null;
@@ -243,14 +221,13 @@
         const firebaseUserIdEl = document.getElementById('firebase-user-id');
 
         const inputView = document.getElementById('input-view');
-        const playlistTitleInput = document.getElementById('playlistTitle');
-        const songInputTextarea = document.getElementById('songInput');
-        const parseSongsBtn = document.getElementById('parse-songs-btn');
+        const playlistDescriptionTextarea = document.getElementById('playlistDescription'); // New: description input
+        const getSuggestionsBtn = document.getElementById('get-suggestions-btn'); // Renamed button
 
         const previewView = document.getElementById('preview-view');
         const previewPlaylistTitleEl = document.getElementById('preview-playlist-title');
         const parsedSongsList = document.getElementById('parsed-songs-list');
-        const backToInputBtn = document.getElementById('back-to-input-btn');
+        const backToDescriptionBtn = document.getElementById('back-to-description-btn'); // Renamed button
         const createPlaylistBtn = document.getElementById('create-playlist-btn');
 
         const createdView = document.getElementById('created-view');
@@ -318,9 +295,8 @@
             switch (currentView) {
                 case 'input':
                     inputView.classList.remove('hidden');
-                    playlistTitleInput.value = playlistTitle;
-                    songInputTextarea.value = songInput;
-                    updateLoadingState(parseSongsBtn, 'Parse Songs with AI');
+                    playlistDescriptionTextarea.value = playlistDescription; // Set description value
+                    updateLoadingState(getSuggestionsBtn, 'Get AI Song Suggestions');
                     break;
                 case 'preview':
                     previewView.classList.remove('hidden');
@@ -356,7 +332,7 @@
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        ${loadingText || originalText.replace('Parse Songs', 'Parsing Songs').replace('Create Playlist', 'Creating Playlist')}...
+                        ${loadingText || originalText.replace('Get AI Song Suggestions', 'Getting Suggestions').replace('Create Playlist', 'Creating Playlist')}...
                     </span>
                 `;
             } else {
@@ -372,7 +348,7 @@
         function renderParsedSongsList() {
             parsedSongsList.innerHTML = '';
             if (parsedSongs.length === 0) {
-                parsedSongsList.innerHTML = '<p class="text-gray-400 text-center">No songs parsed or selected. Go back to add songs.</p>';
+                parsedSongsList.innerHTML = '<p class="text-gray-400 text-center">No songs suggested or selected. Go back to change description.</p>';
                 return;
             }
 
@@ -685,26 +661,34 @@
             },
         };
 
-        // LLM Integration for song parsing
+        // LLM Integration for song parsing and suggestion
         /**
-         * Uses Gemini API to parse a raw string of songs into structured artist/title pairs.
-         * @param {string} rawInput A multi-line string of songs.
-         * @returns {Promise<Array<{artist: string|null, title: string}>>} An array of parsed song objects.
+         * Uses Gemini API to generate a playlist title and song suggestions based on a description.
+         * @param {string} description A text description of the desired playlist.
+         * @returns {Promise<{playlistTitle: string, songs: Array<{artist: string|null, title: string}>}>} An object with suggested title and songs.
          */
-        async function parseSongInput(rawInput) {
+        async function getAiSuggestedPlaylist(description) {
             const chatHistory = [];
-            const prompt = `Extract artist and song title from the following list of songs. Return as a JSON array of objects with 'artist' and 'title' keys. If no artist is specified, leave it null. If a line is empty or cannot be parsed, skip it. Do not include any additional text or markdown outside the JSON array.
+            const prompt = `Based on the following playlist description, suggest a fitting playlist title (short and creative) and a list of 10-15 song suggestions. For each song, provide the artist and title. Return the response as a JSON object with two keys: 'playlistTitle' (string) and 'songs' (an array of objects, each with 'artist' and 'title' keys). If an artist is not explicitly known, set it to null. Ensure the response is ONLY the JSON object, no additional text or markdown outside it.
 
-            Songs:
-            ${rawInput}
+            Playlist Description: "${description}"
 
-            Example Output for "Bohemian Rhapsody - Queen\\nHotel California\\nBillie Jean by Michael Jackson":
-            [
-              { "artist": "Queen", "title": "Bohemian Rhapsody" },
-              { "artist": null, "title": "Hotel California" },
-              { "artist": "Michael Jackson", "title": "Billie Jean" }
-            ]
-            `;
+            Example Output:
+            {
+              "playlistTitle": "Rainy Day Indie Vibes",
+              "songs": [
+                { "artist": "Bon Iver", "title": "Flume" },
+                { "artist": "Phoebe Bridgers", "title": "Motion Sickness" },
+                { "artist": "The xx", "title": "Intro" },
+                { "artist": "Fleet Foxes", "title": "Helplessness Blues" },
+                { "artist": "Maggie Rogers", "title": "Alaska" },
+                { "artist": "Lord Huron", "title": "The Night We Met" },
+                { "artist": "Hozier", "title": "Work Song" },
+                { "artist": "Local Natives", "title": "When Am I Gonna Lose You" },
+                { "artist": "alt-J", "title": "Breezeblocks" },
+                { "artist": "Sufjan Stevens", "title": "Mystery of Love" }
+              ]
+            }`;
 
             chatHistory.push({ role: "user", parts: [{ text: prompt }] });
             const payload = {
@@ -712,15 +696,22 @@
                 generationConfig: {
                     responseMimeType: "application/json",
                     responseSchema: {
-                        type: "ARRAY",
-                        items: {
-                            type: "OBJECT",
-                            properties: {
-                                "artist": { "type": "STRING", "nullable": true },
-                                "title": { "type": "STRING" }
-                            },
-                            "required": ["title"]
-                        }
+                        type: "OBJECT",
+                        properties: {
+                            "playlistTitle": { "type": "STRING" },
+                            "songs": {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        "artist": { "type": "STRING", "nullable": true },
+                                        "title": { "type": "STRING" }
+                                    },
+                                    "required": ["title"]
+                                }
+                            }
+                        },
+                        "required": ["playlistTitle", "songs"]
                     }
                 }
             };
@@ -751,11 +742,11 @@
                     return JSON.parse(cleanedJsonString);
                 } else {
                     console.warn("Gemini API returned no candidates or content.", result);
-                    return [];
+                    return { playlistTitle: "Suggested Playlist", songs: [] };
                 }
             } catch (error) {
-                console.error("Error calling Gemini API:", error);
-                throw new Error("Failed to parse songs using AI.");
+                console.error("Error calling Gemini API for suggestions:", error);
+                throw new Error("Failed to get song suggestions using AI.");
             }
         }
 
@@ -828,7 +819,7 @@
             updateLoadingState(loginSpotifyBtn, 'Login with Spotify', 'Logging in');
             try {
                 await SpotifyAuth.redirectToAuthCodeFlow();
-            } catch(err) { // Corrected: 'sanded' to 'catch'
+            } catch(err) {
                 showMessageBox(`Failed to initiate Spotify login: ${err.message}`, 'error');
                 isLoading = false;
                 updateLoadingState(loginSpotifyBtn, 'Login with Spotify');
@@ -836,27 +827,25 @@
         });
 
         /**
-         * Parses the user's song input using AI and fetches Spotify search results.
+         * Gets AI suggestions based on playlist description and fetches Spotify search results.
          */
-        parseSongsBtn.addEventListener('click', async () => {
-            playlistTitle = playlistTitleInput.value.trim();
-            songInput = songInputTextarea.value.trim();
+        getSuggestionsBtn.addEventListener('click', async () => {
+            playlistDescription = playlistDescriptionTextarea.value.trim();
 
-            if (!playlistTitle) {
-                showMessageBox('Please enter a playlist title.', 'error');
-                return;
-            }
-            if (!songInput) {
-                showMessageBox('Please enter some songs to parse.', 'error');
+            if (!playlistDescription) {
+                showMessageBox('Please enter a description for your playlist.', 'error');
                 return;
             }
 
             isLoading = true;
-            updateLoadingState(parseSongsBtn, 'Parse Songs with AI');
+            updateLoadingState(getSuggestionsBtn, 'Get AI Song Suggestions', 'Getting Suggestions');
             messageBoxContainer.innerHTML = ''; // Clear previous messages
             try {
-                const aiParsed = await parseSongInput(songInput);
-                const songsWithSpotify = await Promise.all(aiParsed.map(async (song) => {
+                const aiResponse = await getAiSuggestedPlaylist(playlistDescription);
+                playlistTitle = aiResponse.playlistTitle; // Use AI suggested title
+                const aiSuggestedSongs = aiResponse.songs;
+
+                const songsWithSpotify = await Promise.all(aiSuggestedSongs.map(async (song) => {
                     const query = song.artist ? `${song.title} ${song.artist}` : song.title;
                     try {
                         const spotifyResults = await SpotifyAPI.searchTracks(query);
@@ -874,8 +863,8 @@
                 currentView = 'preview'; // Move to preview stage
                 stopPreview(); // Ensure no audio plays when moving views
             } catch (err) {
-                console.error('Error parsing songs:', err);
-                showMessageBox(`Error parsing songs: ${err.message}. Please check your input and try again.`, 'error');
+                console.error('Error getting AI suggestions or parsing songs:', err);
+                showMessageBox(`Error getting suggestions: ${err.message}. Please try again.`, 'error');
             } finally {
                 isLoading = false;
                 updateView();
@@ -923,7 +912,7 @@
                     .map(song => song.selectedTrack.uri);
 
                 if (selectedTrackUris.length === 0) {
-                    showMessageBox('No songs selected to add to the playlist. Please select some tracks or go back to input.', 'info');
+                    showMessageBox('No songs selected to add to the playlist. Please select some tracks or go back to change description.', 'info');
                     isLoading = false;
                     updateLoadingState(createPlaylistBtn, 'Create Playlist');
                     return;
@@ -932,7 +921,7 @@
                 const playlist = await SpotifyAPI.createPlaylist(
                     spotifyProfile.id,
                     playlistTitle,
-                    `Playlist created by Spotify Playlist Maker`
+                    `Playlist created by AI-Powered Spotify Playlist Maker` // Updated description
                 );
 
                 // Add tracks to the newly created playlist in batches if needed (Spotify API limit is 100 tracks per request)
@@ -945,8 +934,8 @@
                 newPlaylistUrl = playlist.external_urls.spotify;
                 currentView = 'created'; // Go to confirmation page
                 // Clear inputs for a new playlist
+                playlistDescription = ''; // Clear description
                 playlistTitle = '';
-                songInput = '';
                 parsedSongs = [];
                 stopPreview(); // Stop any playing audio
             } catch (err) {
@@ -1008,8 +997,8 @@
          */
         function resetApp() {
             currentView = 'input';
+            playlistDescription = '';
             playlistTitle = '';
-            songInput = '';
             parsedSongs = [];
             isLoading = false;
             spotifyProfile = null; // Re-authenticate is needed
@@ -1020,7 +1009,7 @@
         }
 
         // --- Event Listeners for Navigation Buttons ---
-        backToInputBtn.addEventListener('click', () => {
+        backToDescriptionBtn.addEventListener('click', () => {
             currentView = 'input';
             stopPreview();
             updateView();
