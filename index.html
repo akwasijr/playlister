@@ -763,9 +763,15 @@
          * Handles the Spotify authentication callback.
          */
         async function handleSpotifyCallback() {
-            const hash = window.location.hash;
-            const params = new URLSearchParams(hash.substring(1)); // Remove '#'
-            const code = params.get('code');
+            // Check for code in query parameters first (standard for PKCE)
+            const urlParams = new URLSearchParams(window.location.search);
+            let code = urlParams.get('code');
+
+            // Fallback to hash if no code in query (for older or specific flows)
+            if (!code && window.location.hash) {
+                const hashParams = new URLSearchParams(window.location.hash.substring(1));
+                code = hashParams.get('code');
+            }
 
             if (code) {
                 currentView = 'auth_pending';
@@ -775,7 +781,7 @@
                     await SpotifyAuth.getAccessToken(code);
                     spotifyProfile = await SpotifyAPI.getCurrentUserProfile();
                     showMessageBox(`Logged in as ${spotifyProfile.display_name}!`, 'success');
-                    // Clean URL by removing hash parameters
+                    // Clean URL by removing query and hash parameters
                     window.history.replaceState({}, document.title, window.location.pathname);
                     currentView = 'input'; // Go to input page after successful auth
                 } catch (err) {
@@ -822,7 +828,7 @@
             updateLoadingState(loginSpotifyBtn, 'Login with Spotify', 'Logging in');
             try {
                 await SpotifyAuth.redirectToAuthCodeFlow();
-            } sanded(err) {
+            } catch(err) { // Corrected: 'sanded' to 'catch'
                 showMessageBox(`Failed to initiate Spotify login: ${err.message}`, 'error');
                 isLoading = false;
                 updateLoadingState(loginSpotifyBtn, 'Login with Spotify');
