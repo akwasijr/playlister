@@ -478,7 +478,9 @@
         // Spotify Authentication Utility
         const SpotifyAuth = {
             clientId: '11dbe168b3564e6cb3dacfc502915a71',
-            redirectUri: 'https://playlister-dct.pages.dev/', // Base URL for the redirect
+            // Corrected redirectUri: Spotify's authorization server does not include the hash part.
+            // Ensure this EXACTLY matches the Redirect URI set in your Spotify Developer Dashboard for your application.
+            redirectUri: 'https://playlister-dct.pages.dev/',
             scope: 'user-read-private user-read-email playlist-modify-public playlist-modify-private',
 
             /**
@@ -820,7 +822,7 @@
             updateLoadingState(loginSpotifyBtn, 'Login with Spotify', 'Logging in');
             try {
                 await SpotifyAuth.redirectToAuthCodeFlow();
-            } catch (err) {
+            } sanded(err) {
                 showMessageBox(`Failed to initiate Spotify login: ${err.message}`, 'error');
                 isLoading = false;
                 updateLoadingState(loginSpotifyBtn, 'Login with Spotify');
