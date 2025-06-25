@@ -1,533 +1,860 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Spotify Playlist Maker</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome for icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- Google Fonts - Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        /* Custom scrollbar for song list */
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #4a5568; /* Tailwind gray-700 */
-            border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #68d391; /* Tailwind green-400 */
-            border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #48bb78; /* Tailwind green-500 */
-        }
+import React, { useState, useEffect, useRef } from 'react';
+// ReactDOM is now globally available via script tag in index.html
+// React is also globally available, useState, useEffect, useRef will be used from global React
 
-        /* Fade-in animation */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in-up {
-            animation: fadeIn 0.5s ease-out forwards;
-        }
-    </style>
-</head>
-<body class="min-h-screen bg-gradient-to-br from-purple-800 to-indigo-900 text-white flex items-center justify-center p-4 sm:p-6">
+// Helper function to generate a random string for PKCE
+function generateRandomString(length) {
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const values = crypto.getRandomValues(new Uint8Array(length));
+    return values.map(byte => possible[byte % possible.length]).join('');
+}
 
-    <div id="app-container" class="w-full max-w-md bg-gray-800 p-6 rounded-xl shadow-2xl space-y-6 animate-fade-in-up">
-        <h1 class="text-3xl sm:text-4xl font-bold text-center text-green-400 mb-6">
-            <i class="fas fa-music mr-2"></i>AI Playlist Maker
-        </h1>
+// Helper function to generate PKCE code challenge
+async function sha256(plain) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(plain);
+    return window.crypto.subtle.digest('SHA-256', data);
+}
 
-        <div id="message-container" class="hidden bg-blue-600 text-white p-3 rounded-lg text-sm text-center shadow-md"></div>
+function base64encode(input) {
+    return btoa(String.fromCharCode(...new Uint8Array(input)))
+        .replace(/=/g, '')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_');
+}
 
-        <div id="loading-indicator" class="hidden flex items-center justify-center p-4">
-            <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-400"></div>
-            <span class="ml-3 text-lg">Loading...</span>
-        </div>
+// Spotify Authentication Utility
+const SpotifyAuth = {
+    clientId: '11dbe168b3564e6cb3dacfc502915a71',
+    redirectUri: 'https://playlister-dct.pages.dev/#', // Base URL for the redirect
+    scope: 'user-read-private user-read-email playlist-modify-public playlist-modify-private',
 
-        <!-- Auth Page -->
-        <div id="auth-page" class="text-center space-y-4">
-            <p class="text-lg text-gray-300">Connect your Spotify account to start creating playlists.</p>
-            <button id="login-button"
-                class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center">
-                <i class="fab fa-spotify mr-2 text-xl"></i>
-                Connect with Spotify
-            </button>
-        </div>
+    /**
+     * Redirects the user to Spotify's authorization page using PKCE.
+     */
+    async redirectToAuthCodeFlow() {
+        const verifier = generateRandomString(128);
+        const challenge = base64encode(await sha256(verifier));
 
-        <!-- Create Playlist Page -->
-        <div id="create-page" class="hidden space-y-6">
-            <div>
-                <label for="playlist-title-input" class="block text-gray-300 text-sm font-semibold mb-2">Playlist Title</label>
-                <input type="text" id="playlist-title-input" placeholder="My Awesome Playlist"
-                    class="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500">
-            </div>
-            <div>
-                <label for="raw-song-input" class="block text-gray-300 text-sm font-semibold mb-2">Enter Songs (e.g., "Song Name by Artist, Another Song")</label>
-                <textarea id="raw-song-input" rows="6" placeholder="Bohemian Rhapsody by Queen&#10;Hotel California&#10;Stairway to Heaven Led Zeppelin"
-                    class="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"></textarea>
-            </div>
-            <button id="parse-songs-button"
-                class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
-                Parse Songs & Preview
-            </button>
-        </div>
+        localStorage.setItem('spotify_code_verifier', verifier);
 
-        <!-- Preview Page -->
-        <div id="preview-page" class="hidden space-y-6">
-            <h2 id="preview-playlist-title" class="text-xl font-semibold text-center text-green-400">Playlist Preview:</h2>
-            <ul id="spotify-search-results" class="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
-                <!-- Song results will be inserted here by JS -->
-            </ul>
-            <button id="create-playlist-button"
-                class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
-                Create Playlist on Spotify
-            </button>
-            <button id="back-to-edit-button"
-                class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 transform hover:scale-105 shadow-lg">
-                Back to Edit
-            </button>
-        </div>
+        const params = new URLSearchParams();
+        params.append('client_id', this.clientId);
+        params.append('response_type', 'code');
+        params.append('redirect_uri', this.redirectUri);
+        params.append('scope', this.scope);
+        params.append('code_challenge_method', 'S256');
+        params.append('code_challenge', challenge);
 
-        <!-- Success Page -->
-        <div id="success-page" class="hidden text-center space-y-4">
-            <div class="text-green-400 text-6xl mb-4">
-                <i class="fas fa-check-circle"></i>
-            </div>
-            <h2 class="text-2xl font-bold text-green-400">Playlist Created Successfully!</h2>
-            <p id="success-playlist-title" class="text-lg text-gray-300"></p>
-            <button id="create-another-playlist-button"
-                class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 transform hover:scale-105 shadow-lg">
-                Create Another Playlist
-            </button>
-        </div>
-    </div>
+        window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
+    },
 
-    <script>
-        // Spotify API configuration
-        const clientId = '11dbe168b3564e6cb3dacfc502915a71';
-        const redirectUri = 'https://playlister-dct.pages.dev/'; // Your Cloudflare Pages URL
-        const scopes = ['user-read-private', 'user-read-email', 'playlist-modify-public', 'playlist-modify-private', 'user-read-playback-state'];
+    /**
+     * Exchanges the authorization code for an access token.
+     * @param {string} code The authorization code received from Spotify.
+     * @returns {Promise<string>} The Spotify access token.
+     */
+    async getAccessToken(code) {
+        const verifier = localStorage.getItem('spotify_code_verifier');
 
-        // Global state variables
-        let accessToken = '';
-        let playlistTitle = '';
-        let rawSongInput = '';
-        let parsedSongs = []; // { title: 'Song', artist: 'Artist' }
-        let spotifySearchResults = []; // { id, name, artist, previewUrl, uri, selected }
-        let currentPage = 'auth'; // 'auth', 'create', 'preview', 'success'
-        let userId = '';
-        let isLoading = false;
+        const params = new URLSearchParams();
+        params.append('client_id', this.clientId);
+        params.append('grant_type', 'authorization_code');
+        params.append('code', code);
+        params.append('redirect_uri', this.redirectUri);
+        params.append('code_verifier', verifier);
 
-        // DOM elements
-        const messageContainer = document.getElementById('message-container');
-        const loadingIndicator = document.getElementById('loading-indicator');
-        const authPage = document.getElementById('auth-page');
-        const createPage = document.getElementById('create-page');
-        const previewPage = document.getElementById('preview-page');
-        const successPage = document.getElementById('success-page');
+        const result = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString(),
+        });
 
-        const loginButton = document.getElementById('login-button');
-        const playlistTitleInput = document.getElementById('playlist-title-input');
-        const rawSongInputArea = document.getElementById('raw-song-input');
-        const parseSongsButton = document.getElementById('parse-songs-button');
-        const previewPlaylistTitle = document.getElementById('preview-playlist-title');
-        const spotifySearchResultsList = document.getElementById('spotify-search-results');
-        const createPlaylistButton = document.getElementById('create-playlist-button');
-        const backToEditButton = document.getElementById('back-to-edit-button');
-        const successPlaylistTitle = document.getElementById('success-playlist-title');
-        const createAnotherPlaylistButton = document.getElementById('create-another-playlist-button');
-
-        // Helper function to display messages
-        function displayMessage(msg, isError = false) {
-            messageContainer.textContent = msg;
-            messageContainer.classList.remove('hidden', 'bg-blue-600', 'bg-red-600');
-            messageContainer.classList.add(isError ? 'bg-red-600' : 'bg-blue-600');
-            // Hide message after 5 seconds if not an error
-            if (!isError) {
-                setTimeout(() => {
-                    messageContainer.classList.add('hidden');
-                }, 5000);
-            }
+        if (!result.ok) {
+            const errorData = await result.json();
+            console.error('Failed to get Spotify access token:', errorData);
+            throw new Error(`Spotify token error: ${errorData.error_description || result.statusText}`);
         }
 
-        // Helper function to show/hide loading indicator
-        function showLoading(show) {
-            isLoading = show;
-            if (show) {
-                loadingIndicator.classList.remove('hidden');
-                parseSongsButton.disabled = true;
-                createPlaylistButton.disabled = true;
-            } else {
-                loadingIndicator.classList.add('hidden');
-                parseSongsButton.disabled = (!playlistTitle.trim() || !rawSongInput.trim());
-                createPlaylistButton.disabled = (spotifySearchResults.filter(s => s.selected).length === 0);
-            }
+        const { access_token, expires_in, refresh_token } = await result.json();
+        localStorage.setItem('spotify_access_token', access_token);
+        localStorage.setItem('spotify_token_expires_at', Date.now() + expires_in * 1000);
+        localStorage.setItem('spotify_refresh_token', refresh_token);
+        localStorage.removeItem('spotify_code_verifier'); // Clear verifier after use
+        return access_token;
+    },
+
+    /**
+     * Refreshes the Spotify access token using the stored refresh token.
+     * @returns {Promise<string|null>} The new access token, or null if refresh fails.
+     */
+    async refreshAccessToken() {
+        const refreshToken = localStorage.getItem('spotify_refresh_token');
+        if (!refreshToken) {
+            console.log('No refresh token found. Redirecting to login.');
+            return null;
         }
 
-        // Function to render the correct page
-        function renderPage() {
-            authPage.classList.add('hidden');
-            createPage.classList.add('hidden');
-            previewPage.classList.add('hidden');
-            successPage.classList.add('hidden');
+        const params = new URLSearchParams();
+        params.append('grant_type', 'refresh_token');
+        params.append('refresh_token', refreshToken);
+        params.append('client_id', this.clientId); // Client ID is needed for refresh token flow
 
-            if (currentPage === 'auth') {
-                authPage.classList.remove('hidden');
-            } else if (currentPage === 'create') {
-                createPage.classList.remove('hidden');
-            } else if (currentPage === 'preview') {
-                previewPage.classList.remove('hidden');
-                previewPlaylistTitle.textContent = `Playlist Preview: ${playlistTitle}`;
-                renderSpotifySearchResults();
-            } else if (currentPage === 'success') {
-                successPage.classList.remove('hidden');
-                successPlaylistTitle.textContent = `Your playlist "${playlistTitle}" has been added to Spotify.`;
-            }
+        const result = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString(),
+        });
+
+        if (!result.ok) {
+            const errorData = await result.json();
+            console.error('Failed to refresh Spotify access token:', errorData);
+            // If refresh fails, clear tokens and require re-authentication
+            localStorage.removeItem('spotify_access_token');
+            localStorage.removeItem('spotify_token_expires_at');
+            localStorage.removeItem('spotify_refresh_token');
+            return null;
         }
 
-        // Function to get Spotify User Profile
-        async function fetchUserProfile(token) {
-            try {
-                const response = await fetch('https://api.spotify.com/v1/me', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                if (!response.ok) {
-                    throw new Error(`Spotify API error: ${response.status} ${response.statusText}`);
+        const { access_token, expires_in } = await result.json();
+        localStorage.setItem('spotify_access_token', access_token);
+        localStorage.setItem('spotify_token_expires_at', Date.now() + expires_in * 1000);
+        return access_token;
+    },
+
+    /**
+     * Retrieves a valid Spotify access token, refreshing it if necessary.
+     * @returns {Promise<string|null>} A valid access token, or null if login is required.
+     */
+    async getValidAccessToken() {
+        let token = localStorage.getItem('spotify_access_token');
+        let expiresAt = localStorage.getItem('spotify_token_expires_at');
+
+        if (!token || !expiresAt || Date.now() >= parseInt(expiresAt, 10)) {
+            console.log('Access token expired or not found. Attempting to refresh...');
+            token = await this.refreshAccessToken();
+        }
+        return token;
+    },
+};
+
+// Spotify API Interaction Utility
+const SpotifyAPI = {
+    /**
+     * Generic Spotify API call helper.
+     * @param {string} url The Spotify API endpoint (e.g., '/me', '/search').
+     * @param {string} method HTTP method (GET, POST).
+     * @param {object|null} body Request body for POST requests.
+     * @returns {Promise<object>} The JSON response from the Spotify API.
+     */
+    async call(url, method = 'GET', body = null) {
+        const token = await SpotifyAuth.getValidAccessToken();
+        if (!token) {
+            throw new new Error('No valid Spotify access token. Please log in.');
+        }
+
+        const headers = {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        };
+
+        const config = {
+            method,
+            headers,
+        };
+
+        if (body) {
+            config.body = JSON.stringify(body);
+        }
+
+        const response = await fetch(`https://api.spotify.com/v1${url}`, config);
+
+        if (response.status === 401) { // Token expired or invalid
+            // Clear tokens and force re-authentication
+            localStorage.removeItem('spotify_access_token');
+            localStorage.removeItem('spotify_token_expires_at');
+            localStorage.removeItem('spotify_refresh_token');
+            throw new Error('Spotify token expired or invalid. Please re-authenticate.');
+        }
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error(`Spotify API error on ${url}:`, errorData);
+            throw new Error(`Spotify API error: ${errorData.error?.message || response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Fetches the current user's Spotify profile.
+     */
+    async getCurrentUserProfile() {
+        return this.call('/me');
+    },
+
+    /**
+     * Searches for tracks on Spotify.
+     * @param {string} query The search query (e.g., "Bohemian Rhapsody Queen").
+     * @returns {Promise<object>} Search results.
+     */
+    async searchTracks(query) {
+        return this.call(`/search?q=${encodeURIComponent(query)}&type=track&limit=5`);
+    },
+
+    /**
+     * Creates a new Spotify playlist for the given user.
+     * @param {string} userId The Spotify user ID.
+     * @param {string} name The name of the playlist.
+     * @param {string} description The description of the playlist.
+     * @param {boolean} isPublic Whether the playlist is public or private.
+     * @returns {Promise<object>} The created playlist object.
+     */
+    async createPlaylist(userId, name, description = '', isPublic = true) {
+        return this.call(`/users/${userId}/playlists`, 'POST', {
+            name,
+            description,
+            public: isPublic,
+        });
+    },
+
+    /**
+     * Adds tracks to an existing Spotify playlist.
+     * @param {string} playlistId The ID of the playlist.
+     * @param {string[]} uris An array of Spotify track URIs (e.g., ['spotify:track:trackId']).
+     * @returns {Promise<object>} Response indicating success.
+     */
+    async addTracksToPlaylist(playlistId, uris) {
+        return this.call(`/playlists/${playlistId}/tracks`, 'POST', {
+            uris,
+        });
+    },
+};
+
+// LLM Integration for song parsing
+/**
+ * Uses Gemini API to parse a raw string of songs into structured artist/title pairs.
+ * @param {string} rawInput A multi-line string of songs.
+ * @returns {Promise<Array<{artist: string|null, title: string}>>} An array of parsed song objects.
+ */
+async function parseSongInput(rawInput) {
+    const chatHistory = [];
+    const prompt = `Extract artist and song title from the following list of songs. Return as a JSON array of objects with 'artist' and 'title' keys. If no artist is specified, leave it null. If a line is empty or cannot be parsed, skip it. Do not include any additional text or markdown outside the JSON array.
+
+    Songs:
+    ${rawInput}
+
+    Example Output for "Bohemian Rhapsody - Queen\\nHotel California\\nBillie Jean by Michael Jackson":
+    [
+      { "artist": "Queen", "title": "Bohemian Rhapsody" },
+      { "artist": null, "title": "Hotel California" },
+      { "artist": "Michael Jackson", "title": "Billie Jean" }
+    ]
+    `;
+
+    chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+    const payload = {
+        contents: chatHistory,
+        generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: "ARRAY",
+                items: {
+                    type: "OBJECT",
+                    properties: {
+                        "artist": { "type": "STRING", "nullable": true },
+                        "title": { "type": "STRING" }
+                    },
+                    "required": ["title"]
                 }
-                const data = await response.json();
-                userId = data.id;
-                displayMessage(`Welcome, ${data.display_name || data.id}!`);
-            } catch (error) {
-                console.error('Error fetching user profile:', error);
-                displayMessage('Failed to fetch user profile. Please try authenticating again.', true);
-                accessToken = ''; // Clear token on error
-                currentPage = 'auth';
-                renderPage();
             }
         }
+    };
 
-        // Step 1: Handle Spotify authentication redirect
-        window.addEventListener('load', () => {
-            console.log('Window loaded. Current URL:', window.location.href); // New log
-            console.log('Raw hash on load:', window.location.hash); // New log
+    const apiKey = ""; // Canvas will provide this API key at runtime.
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
-            const hash = window.location.hash
-                .substring(1)
-                .split('&')
-                .reduce((initial, item) => {
-                    if (item) {
-                        let parts = item.split('=');
-                        initial[parts[0]] = decodeURIComponent(parts[1]);
-                    }
-                    return initial;
-                }, {});
+    try {
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
 
-            console.log('Parsed hash object:', hash); // New log
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Gemini API error response:', errorText);
+            throw new Error(`Gemini API request failed with status: ${response.status}`);
+        }
 
-            window.location.hash = ''; // Clear hash from URL
+        const result = await response.json();
+        if (result.candidates && result.candidates.length > 0 &&
+            result.candidates[0].content && result.candidates[0].content.parts &&
+            result.candidates[0].content.parts.length > 0) {
+            const jsonString = result.candidates[0].content.parts[0].text;
+            // The API sometimes returns JSON wrapped in markdown code block, remove it if present.
+            const cleanedJsonString = jsonString.replace(/```json\n|\n```/g, '').trim();
+            return JSON.parse(cleanedJsonString);
+        } else {
+            console.warn("Gemini API returned no candidates or content.", result);
+            return [];
+        }
+    } catch (error) {
+        console.error("Error calling Gemini API:", error);
+        throw new Error("Failed to parse songs using AI.");
+    }
+}
 
-            if (hash.access_token) {
-                accessToken = hash.access_token;
-                console.log('Access Token extracted:', accessToken); // New log
-                currentPage = 'create';
-                console.log('Current page set to:', currentPage); // New log
-                fetchUserProfile(accessToken);
-            } else if (!accessToken) {
-                currentPage = 'auth'; // Ensure we are on auth if no token
-                console.log('No access token in hash. Current page set to:', currentPage); // New log
+
+// Custom Modal/Message Box Component for user feedback
+const MessageBox = ({ message, type = 'info', onClose }) => {
+    const bgColor = type === 'error' ? 'bg-red-600' : (type === 'success' ? 'bg-green-600' : 'bg-blue-600');
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+            <div className={`p-6 rounded-lg shadow-xl ${bgColor} max-w-sm w-full text-center animate-fade-in`}>
+                <p className="text-lg font-semibold mb-4 text-white">{message}</p>
+                <button
+                    onClick={onClose}
+                    className="mt-4 px-6 py-2 bg-white text-gray-900 rounded-md hover:bg-gray-200 transition duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-white"
+                >
+                    Close
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// Main App Component
+function App() {
+    // State to manage the current view of the application
+    const [view, setView] = useState('input'); // 'input', 'preview', 'created', 'auth_pending'
+    // State for playlist title and raw song input
+    const [playlistTitle, setPlaylistTitle] = useState('');
+    const [songInput, setSongInput] = useState('');
+    // State for songs parsed by AI and enriched with Spotify data
+    const [parsedSongs, setParsedSongs] = useState([]); // { artist, title, spotifyResults: [], selectedTrack: null }
+    // Loading indicator state
+    const [loading, setLoading] = useState(false);
+    // Error/Message state for displaying feedback to the user
+    const [message, setMessage] = useState(null);
+    // Spotify user profile data
+    const [spotifyProfile, setSpotifyProfile] = useState(null);
+    // URL of the newly created Spotify playlist
+    const [newPlaylistUrl, setNewPlaylistUrl] = useState('');
+
+    // Ref for the audio element used for track previews
+    const audioRef = useRef(null);
+    // State to track which track's preview is currently playing
+    const [playingTrackId, setPlayingTrackId] = useState(null);
+
+    // Firebase state variables (as per boilerplate instructions)
+    const [firebaseAppInstance, setFirebaseAppInstance] = useState(null);
+    const [firebaseDbInstance, setFirebaseDbInstance] = useState(null);
+    const [firebaseAuthInstance, setFirebaseAuthInstance] = useState(null);
+    const [firebaseUserId, setFirebaseUserId] = useState(null);
+    const [isFirebaseAuthReady, setIsFirebaseAuthReady] = useState(false);
+
+
+    // Effect to handle Firebase initialization and authentication (boilerplate)
+    useEffect(() => {
+        const initFirebase = async () => {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+            if (Object.keys(firebaseConfig).length === 0) {
+                console.warn("Firebase config is empty. Firebase services will not be available.");
+                setIsFirebaseAuthReady(true); // Mark ready even if not configured
+                return;
             }
-            renderPage();
-        });
 
-        // Event Listeners
-        loginButton.addEventListener('click', () => {
-            console.log('Login button clicked!');
-            const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes.join(' '))}&response_type=token&show_dialog=true`;
-            console.log('Attempting to redirect to Spotify auth URL:', authUrl);
-            window.location = authUrl;
-        });
-
-        playlistTitleInput.addEventListener('input', (e) => {
-            playlistTitle = e.target.value;
-            showLoading(isLoading); // Update button state
-        });
-
-        rawSongInputArea.addEventListener('input', (e) => {
-            rawSongInput = e.target.value;
-            showLoading(isLoading); // Update button state
-        });
-
-        parseSongsButton.addEventListener('click', parseSongsWithAI);
-        createPlaylistButton.addEventListener('click', createPlaylist);
-        backToEditButton.addEventListener('click', () => {
-            currentPage = 'create';
-            renderPage();
-        });
-        createAnotherPlaylistButton.addEventListener('click', startNewPlaylist);
-
-
-        // Step 2: Use Gemini to parse song input
-        async function parseSongsWithAI() {
-            showLoading(true);
-            displayMessage('Using AI to parse songs...');
             try {
-                // Prompt for Gemini API
-                const prompt = `From the following text, extract song titles and their respective artists. If an artist is not explicitly mentioned for a song, infer it from context if possible, or leave it blank. Provide the output as a JSON array of objects, where each object has 'title' and 'artist' keys.
-                Example input: "Bohemian Rhapsody by Queen, Hotel California, Stairway to Heaven Led Zeppelin, Smells Like Teen Spirit"
-                Example output: [{"title": "Bohemian Rhapsody", "artist": "Queen"}, {"title": "Hotel California", "artist": "Eagles"}, {"title": "Stairway to Heaven", "artist": "Led Zeppelin"}, {"title": "Smells Like Teen Spirit", "artist": "Nirvana"}]
-                
-                Now, parse this text: "${rawSongInput}"`;
+                // Access Firebase globals that should be available from index.html script
+                const app = window.firebaseApp;
+                const db = window.firebaseDb;
+                const auth = window.firebaseAuth;
 
-                let chatHistory = [];
-                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                setFirebaseAppInstance(app);
+                setFirebaseDbInstance(db);
+                setFirebaseAuthInstance(auth);
 
-                const payload = {
-                    contents: chatHistory,
-                    generationConfig: {
-                        responseMimeType: "application/json",
-                        responseSchema: {
-                            type: "ARRAY",
-                            items: {
-                                type: "OBJECT",
-                                properties: {
-                                    "title": { "type": "STRING" },
-                                    "artist": { "type": "STRING" }
-                                },
-                                "propertyOrdering": ["title", "artist"]
-                            }
-                        }
-                    }
-                };
-
-                const apiKey = ""; // Canvas will provide this at runtime
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                const result = await response.json();
-
-                if (result.candidates && result.candidates.length > 0 &&
-                    result.candidates[0].content && result.candidates[0].content.parts &&
-                    result.candidates[0].content.parts.length > 0) {
-                    const jsonText = result.candidates[0].content.parts[0].text;
-                    parsedSongs = JSON.parse(jsonText);
-                    displayMessage('Songs parsed! Now searching Spotify...');
-                    searchSongsOnSpotify(parsedSongs);
+                // Assuming authentication is handled in the global script and userId is available
+                // If not, onAuthStateChanged should be used here as well to get the user ID
+                if (window.firebaseUserId) {
+                    setFirebaseUserId(window.firebaseUserId);
+                    setIsFirebaseAuthReady(true);
                 } else {
-                    displayMessage('AI could not parse the songs. Please try a different format.', true);
-                    console.error('Gemini API returned an unexpected response structure:', result);
-                    showLoading(false);
-                }
-            } catch (error) {
-                console.error('Error calling Gemini API:', error);
-                displayMessage('Failed to parse songs with AI. Please check your input.', true);
-                showLoading(false);
-            }
-        }
-
-        // Step 3: Search Spotify for parsed songs and render preview
-        async function searchSongsOnSpotify(songsToSearch) {
-            showLoading(true);
-            const results = [];
-            for (const song of songsToSearch) {
-                const query = song.artist ? `${song.title} artist:${song.artist}` : song.title;
-                try {
-                    const response = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=1`, {
-                        headers: {
-                            'Authorization': `Bearer ${accessToken}`
+                    // Fallback in case onAuthStateChanged in global script hasn't fired yet
+                    const unsubscribe = window.onAuthStateChanged(auth, (user) => {
+                        if (user) {
+                            setFirebaseUserId(user.uid);
                         }
+                        setIsFirebaseAuthReady(true);
                     });
-                    if (!response.ok) {
-                        throw new Error(`Spotify API error: ${response.status} ${response.statusText}`);
-                    }
-                    const data = await response.json();
-                    if (data.tracks && data.tracks.items.length > 0) {
-                        const track = data.tracks.items[0];
-                        results.push({
-                            id: track.id,
-                            name: track.name,
-                            artist: track.artists.map(a => a.name).join(', '),
-                            previewUrl: track.preview_url,
-                            uri: track.uri,
-                            selected: true // Default to selected
-                        });
-                    } else {
-                        results.push({
-                            id: null,
-                            name: song.title,
-                            artist: song.artist || 'Unknown',
-                            previewUrl: null,
-                            uri: null,
-                            selected: false, // Cannot select if not found
-                            notFound: true
-                        });
-                    }
-                } catch (error) {
-                    console.error(`Error searching for ${query} on Spotify:`, error);
-                    displayMessage(`Failed to search for some songs. Please check your internet connection or Spotify access.`, true);
-                }
-            }
-            spotifySearchResults = results;
-            showLoading(false);
-            displayMessage('Review your playlist preview below!');
-            currentPage = 'preview';
-            renderPage();
-        }
-
-        // Render Spotify search results in the preview list
-        function renderSpotifySearchResults() {
-            spotifySearchResultsList.innerHTML = ''; // Clear previous results
-            spotifySearchResults.forEach((song, index) => {
-                const listItem = document.createElement('li');
-                listItem.className = 'flex items-center p-3 bg-gray-700 rounded-lg shadow-md transition duration-200 hover:bg-gray-600';
-
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.checked = song.selected;
-                checkbox.disabled = !song.uri; // Disable if not found
-                checkbox.className = 'form-checkbox h-5 w-5 text-green-500 rounded border-gray-500 focus:ring-green-500 cursor-pointer';
-                checkbox.addEventListener('change', () => {
-                    song.selected = checkbox.checked;
-                    showLoading(isLoading); // Update create button state
-                });
-                listItem.appendChild(checkbox);
-
-                const divContent = document.createElement('div');
-                divContent.className = 'ml-3 flex-grow';
-
-                const pName = document.createElement('p');
-                pName.className = `font-semibold ${song.notFound ? 'text-red-400' : 'text-white'}`;
-                pName.textContent = song.name;
-                if (song.notFound) {
-                    const spanNotFound = document.createElement('span');
-                    spanNotFound.className = 'ml-2 text-sm text-red-300';
-                    spanNotFound.textContent = '(Not Found on Spotify)';
-                    pName.appendChild(spanNotFound);
-                }
-                divContent.appendChild(pName);
-
-                const pArtist = document.createElement('p');
-                pArtist.className = 'text-sm text-gray-400';
-                pArtist.textContent = song.artist;
-                divContent.appendChild(pArtist);
-
-                listItem.appendChild(divContent);
-
-                if (song.previewUrl) {
-                    const audio = document.createElement('audio');
-                    audio.controls = true;
-                    audio.className = 'ml-auto w-24 h-8';
-                    const source = document.createElement('source');
-                    source.src = song.previewUrl;
-                    source.type = 'audio/mpeg';
-                    audio.appendChild(source);
-                    listItem.appendChild(audio);
-                }
-                spotifySearchResultsList.appendChild(listItem);
-            });
-            showLoading(isLoading); // Update create playlist button state based on selections
-        }
-
-
-        // Step 4: Create playlist on Spotify
-        async function createPlaylist() {
-            showLoading(true);
-            displayMessage('Creating playlist on Spotify...');
-            const selectedTrackUris = spotifySearchResults
-                .filter(song => song.selected && song.uri)
-                .map(song => song.uri);
-
-            if (!playlistTitle.trim()) {
-                displayMessage('Please enter a playlist title.', true);
-                showLoading(false);
-                return;
-            }
-            if (selectedTrackUris.length === 0) {
-                displayMessage('No songs selected to add to the playlist.', true);
-                showLoading(false);
-                return;
-            }
-
-            try {
-                // Create the playlist
-                const createPlaylistResponse = await fetch(`https://api.spotify.com/v1/users/${userId}/playlists`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        name: playlistTitle,
-                        public: false, // Can be toggled, setting to private by default
-                        description: 'Playlist created by AI-powered Playlist Maker'
-                    })
-                });
-
-                if (!createPlaylistResponse.ok) {
-                    throw new Error(`Failed to create playlist: ${createPlaylistResponse.status} ${createPlaylistResponse.statusText}`);
-                }
-                const playlistData = await createPlaylistResponse.json();
-                const playlistId = playlistData.id;
-
-                // Add tracks to the playlist
-                const addTracksResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        uris: selectedTrackUris
-                    })
-                });
-
-                if (!addTracksResponse.ok) {
-                    throw new Error(`Failed to add tracks to playlist: ${addTracksResponse.status} ${addTracksResponse.statusText}`);
+                    return () => unsubscribe();
                 }
 
-                displayMessage('Playlist created and songs added successfully!');
-                showLoading(false);
-                currentPage = 'success';
-                renderPage();
             } catch (error) {
-                console.error('Error creating playlist:', error);
-                displayMessage(`Error: ${error.message}. Please try again.`, true);
-                showLoading(false);
+                console.error("Firebase initialization error within React component:", error);
+                setIsFirebaseAuthReady(true); // Ensure app can proceed even if Firebase fails
             }
+        };
+
+        initFirebase();
+    }, []);
+
+
+    // Effect to handle Spotify authentication callback
+    useEffect(() => {
+        const handleSpotifyCallback = async () => {
+            const hash = window.location.hash;
+            const params = new URLSearchParams(hash.substring(1)); // Remove '#'
+            const code = params.get('code');
+
+            if (code) {
+                setView('auth_pending'); // Show loading for auth
+                try {
+                    await SpotifyAuth.getAccessToken(code);
+                    const profile = await SpotifyAPI.getCurrentUserProfile();
+                    setSpotifyProfile(profile);
+                    setMessage({ type: 'success', text: `Logged in as ${profile.display_name}!` });
+                    // Clean URL by removing hash parameters
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    setView('input'); // Go to input page after successful auth
+                } catch (err) {
+                    console.error('Spotify Auth Error:', err);
+                    setMessage({ type: 'error', text: `Spotify Login Failed: ${err.message}. Please try again.` });
+                    setView('input'); // Fallback to input
+                } finally {
+                    setLoading(false);
+                }
+            } else {
+                // Try to get token from localStorage if user visits directly
+                const token = localStorage.getItem('spotify_access_token');
+                if (token) {
+                    try {
+                        const profile = await SpotifyAPI.getCurrentUserProfile();
+                        setSpotifyProfile(profile);
+                    } catch (err) {
+                        console.error('Error fetching Spotify profile:', err);
+                        // If token is invalid, clear it
+                        localStorage.removeItem('spotify_access_token');
+                        localStorage.removeItem('spotify_token_expires_at');
+                        localStorage.removeItem('spotify_refresh_token');
+                        setSpotifyProfile(null);
+                    }
+                }
+            }
+        };
+
+        handleSpotifyCallback();
+    }, []);
+
+    /**
+     * Initiates the Spotify login process.
+     */
+    const handleLogin = async () => {
+        try {
+            await SpotifyAuth.redirectToAuthCodeFlow();
+        } catch (err) {
+            setMessage({ type: 'error', text: `Failed to initiate Spotify login: ${err.message}` });
+        }
+    };
+
+    /**
+     * Parses the user's song input using AI and fetches Spotify search results.
+     */
+    const handleParseSongs = async () => {
+        if (!playlistTitle.trim()) {
+            setMessage({ type: 'error', text: 'Please enter a playlist title.' });
+            return;
+        }
+        if (!songInput.trim()) {
+            setMessage({ type: 'error', text: 'Please enter some songs to parse.' });
+            return;
         }
 
-        // Reset app for new playlist
-        function startNewPlaylist() {
-            playlistTitle = '';
-            rawSongInput = '';
-            parsedSongs = [];
-            spotifySearchResults = [];
-            messageContainer.classList.add('hidden'); // Clear message
-            playlistTitleInput.value = '';
-            rawSongInputArea.value = '';
-            currentPage = 'create';
-            renderPage();
-            showLoading(false); // Ensure buttons are enabled if inputs are valid
+        setLoading(true);
+        setMessage(null); // Clear previous messages
+        try {
+            const aiParsed = await parseSongInput(songInput);
+            const songsWithSpotify = await Promise.all(aiParsed.map(async (song) => {
+                const query = song.artist ? `${song.title} ${song.artist}` : song.title;
+                try {
+                    const spotifyResults = await SpotifyAPI.searchTracks(query);
+                    return {
+                        ...song,
+                        spotifyResults: spotifyResults.tracks.items,
+                        selectedTrack: spotifyResults.tracks.items.length > 0 ? spotifyResults.tracks.items[0] : null // Pre-select first result
+                    };
+                } catch (searchErr) {
+                    console.error(`Error searching Spotify for "${query}":`, searchErr);
+                    return { ...song, spotifyResults: [], selectedTrack: null };
+                }
+            }));
+            setParsedSongs(songsWithSpotify);
+            setView('preview'); // Move to preview stage
+        } catch (err) {
+            console.error('Error parsing songs:', err);
+            setMessage({ type: 'error', text: `Error parsing songs: ${err.message}. Please check your input and try again.` });
+        } finally {
+            setLoading(false);
         }
-    </script>
-</body>
-</html>
+    };
+
+    /**
+     * Handles selection of a specific Spotify track for a parsed song entry.
+     * @param {number} index The index of the song in the `parsedSongs` array.
+     * @param {object} track The selected Spotify track object.
+     */
+    const handleTrackSelection = (index, track) => {
+        const updatedSongs = [...parsedSongs];
+        updatedSongs[index].selectedTrack = track;
+        setParsedSongs(updatedSongs);
+    };
+
+    /**
+     * Removes a song from the preview list.
+     * @param {number} index The index of the song to remove.
+     */
+    const handleRemoveSong = (index) => {
+        const updatedSongs = parsedSongs.filter((_, i) => i !== index);
+        setParsedSongs(updatedSongs);
+    };
+
+    /**
+     * Creates the Spotify playlist with selected tracks.
+     */
+    const handleCreatePlaylist = async () => {
+        if (!spotifyProfile) {
+            setMessage({ type: 'error', text: 'Please log in with Spotify first.' });
+            return;
+        }
+
+        setLoading(true);
+        setMessage(null); // Clear previous messages
+        try {
+            const selectedTrackUris = parsedSongs
+                .filter(song => song.selectedTrack && song.selectedTrack.uri)
+                .map(song => song.selectedTrack.uri);
+
+            if (selectedTrackUris.length === 0) {
+                setMessage({ type: 'info', text: 'No songs selected to add to the playlist. Please select some tracks or go back to input.' });
+                setLoading(false);
+                return;
+            }
+
+            const playlist = await SpotifyAPI.createPlaylist(
+                spotifyProfile.id,
+                playlistTitle,
+                `Playlist created by Spotify Playlist Maker`
+            );
+
+            // Add tracks to the newly created playlist in batches if needed (Spotify API limit is 100 tracks per request)
+            const chunkSize = 100;
+            for (let i = 0; i < selectedTrackUris.length; i += chunkSize) {
+                const chunk = selectedTrackUris.slice(i, i + chunkSize);
+                await SpotifyAPI.addTracksToPlaylist(playlist.id, chunk);
+            }
+
+            setNewPlaylistUrl(playlist.external_urls.spotify);
+            setView('created'); // Go to confirmation page
+            // Clear inputs for a new playlist
+            setPlaylistTitle('');
+            setSongInput('');
+            setParsedSongs([]);
+        } catch (err) {
+            console.error('Error creating playlist:', err);
+            setMessage({ type: 'error', text: `Failed to create playlist: ${err.message}. Please ensure you are logged in and have permission.` });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    /**
+     * Plays a short audio preview of a Spotify track.
+     * @param {string} previewUrl The URL of the audio preview.
+     * @param {string} trackId The ID of the track.
+     */
+    const playPreview = (previewUrl, trackId) => {
+        // Stop any currently playing audio
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.src = ''; // Clear source to ensure it reloads
+            setPlayingTrackId(null);
+        }
+
+        // If the same track is clicked again, stop it. Otherwise, play the new one.
+        if (previewUrl && playingTrackId !== trackId) {
+            audioRef.current = new Audio(previewUrl);
+            audioRef.current.volume = 0.5; // Set a default volume for previews
+            audioRef.current.play().catch(e => console.error("Error playing audio:", e));
+            setPlayingTrackId(trackId);
+            // Reset playing state when audio ends or errors
+            audioRef.current.onended = () => setPlayingTrackId(null);
+            audioRef.current.onerror = () => {
+                console.error("Audio playback error.");
+                setPlayingTrackId(null);
+            };
+        }
+    };
+
+    /**
+     * Stops the currently playing audio preview.
+     */
+    const stopPreview = () => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.src = '';
+            setPlayingTrackId(null);
+        }
+    };
+
+    /**
+     * Resets the application to the initial input state, clearing all data.
+     */
+    const resetApp = () => {
+        setView('input');
+        setPlaylistTitle('');
+        setSongInput('');
+        setParsedSongs([]);
+        setLoading(false);
+        setMessage(null);
+        setNewPlaylistUrl('');
+        stopPreview(); // Stop any playing audio
+    };
+
+    return (
+        <div className="min-h-screen bg-[#121212] text-white flex items-center justify-center p-4">
+            <div className="bg-[#1a1a1a] rounded-xl shadow-2xl p-8 max-w-2xl w-full border border-gray-700">
+                <h1 className="text-4xl font-bold text-center text-[#1DB954] mb-8">
+                    Spotify Playlist Maker
+                </h1>
+
+                {/* Message Box for general notifications */}
+                {message && (
+                    <MessageBox
+                        message={message.text}
+                        type={message.type}
+                        onClose={() => setMessage(null)}
+                    />
+                )}
+
+                {/* Conditional rendering based on Spotify authentication status */}
+                {!spotifyProfile ? (
+                    <div className="text-center">
+                        <p className="mb-6 text-lg text-gray-300">
+                            Please log in with your Spotify account to create playlists.
+                        </p>
+                        <button
+                            onClick={handleLogin}
+                            className="bg-[#1DB954] text-white font-semibold py-3 px-8 rounded-full shadow-lg hover:bg-[#1ed760] transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[#1DB954] focus:ring-opacity-50"
+                            disabled={loading}
+                        >
+                            {loading ? 'Logging in...' : 'Login with Spotify'}
+                        </button>
+                    </div>
+                ) : (
+                    <>
+                        <div className="text-center mb-6">
+                            <p className="text-lg text-gray-300">
+                                Logged in as: <span className="font-semibold text-[#1DB954]">{spotifyProfile.display_name}</span>
+                            </p>
+                            {/* Display Firebase User ID for debugging/compliance, if ready */}
+                            {isFirebaseAuthReady && firebaseUserId && (
+                                <p className="text-sm text-gray-500 mt-1">Firebase User ID: {firebaseUserId}</p>
+                            )}
+                        </div>
+
+                        {/* Input View: Where user enters playlist title and songs */}
+                        {view === 'input' && (
+                            <div className="space-y-6">
+                                <div>
+                                    <label htmlFor="playlistTitle" className="block text-lg font-medium text-gray-300 mb-2">
+                                        Playlist Title:
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="playlistTitle"
+                                        value={playlistTitle}
+                                        onChange={(e) => setPlaylistTitle(e.target.value)}
+                                        placeholder="My Awesome Playlist"
+                                        className="w-full p-3 bg-[#282828] border border-[#333] rounded-md text-white placeholder-gray-500 focus:ring-2 focus:ring-[#1DB954] focus:border-transparent transition duration-200"
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="songInput" className="block text-lg font-medium text-gray-300 mb-2">
+                                        Enter Songs (one per line or comma-separated):
+                                    </label>
+                                    <textarea
+                                        id="songInput"
+                                        value={songInput}
+                                        onChange={(e) => setSongInput(e.target.value)}
+                                        rows="8"
+                                        placeholder="Bohemian Rhapsody - Queen&#10;Hotel California by Eagles&#10;Billie Jean, Michael Jackson"
+                                        className="w-full p-3 bg-[#282828] border border-[#333] rounded-md text-white placeholder-gray-500 focus:ring-2 focus:ring-[#1DB954] focus:border-transparent transition duration-200 resize-y"
+                                    ></textarea>
+                                </div>
+                                <button
+                                    onClick={handleParseSongs}
+                                    className="w-full bg-[#1DB954] text-white font-semibold py-3 px-6 rounded-full shadow-lg hover:bg-[#1ed760] transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[#1DB954] focus:ring-opacity-50"
+                                    disabled={loading}
+                                >
+                                    {loading ? (
+                                        <span className="flex items-center justify-center">
+                                            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            Parsing Songs...
+                                        </span>
+                                    ) : 'Parse Songs with AI'}
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Preview View: Displays parsed songs and Spotify search results for selection */}
+                        {view === 'preview' && (
+                            <div className="space-y-6">
+                                <h2 className="text-3xl font-semibold text-white mb-4 text-center">
+                                    Preview Playlist: <span className="text-[#1DB954]">{playlistTitle}</span>
+                                </h2>
+                                {parsedSongs.length === 0 && (
+                                    <p className="text-gray-400 text-center">No songs parsed or selected. Go back to add songs.</p>
+                                )}
+                                <div className="space-y-4 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
+                                    {parsedSongs.map((song, index) => (
+                                        <div key={index} className="bg-[#282828] p-4 rounded-lg shadow flex flex-col sm:flex-row items-center justify-between gap-4 border border-[#333]">
+                                            <div className="flex-grow text-center sm:text-left">
+                                                <p className="text-xl font-bold text-white">{song.title}</p>
+                                                <p className="text-gray-400">{song.artist || 'Unknown Artist'}</p>
+                                                {song.selectedTrack && (
+                                                    <p className="text-sm text-gray-500 mt-1">
+                                                        Selected: {song.selectedTrack.name} by {song.selectedTrack.artists.map(a => a.name).join(', ')}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-col sm:flex-row items-center gap-2">
+                                                {song.spotifyResults.length > 0 ? (
+                                                    <select
+                                                        className="p-2 bg-[#333] border border-[#444] rounded-md text-white focus:ring-2 focus:ring-[#1DB954] focus:border-transparent transition duration-200"
+                                                        onChange={(e) => {
+                                                            const selected = song.spotifyResults.find(t => t.id === e.target.value);
+                                                            handleTrackSelection(index, selected);
+                                                        }}
+                                                        value={song.selectedTrack?.id || ''}
+                                                    >
+                                                        {song.spotifyResults.map(track => (
+                                                            <option key={track.id} value={track.id}>
+                                                                {track.name} - {track.artists.map(a => a.name).join(', ')}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                ) : (
+                                                    <span className="text-red-400 text-sm">No Spotify results found.</span>
+                                                )}
+                                                {song.selectedTrack && song.selectedTrack.preview_url && (
+                                                    <button
+                                                        onClick={() => playingTrackId === song.selectedTrack.id ? stopPreview() : playPreview(song.selectedTrack.preview_url, song.selectedTrack.id)}
+                                                        className={`p-2 rounded-full ${playingTrackId === song.selectedTrack.id ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'} text-white transition duration-200 flex items-center justify-center`}
+                                                        title={playingTrackId === song.selectedTrack.id ? "Stop Preview" : "Play Preview"}
+                                                    >
+                                                        {playingTrackId === song.selectedTrack.id ? (
+                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                                                                <path fillRule="evenodd" d="M6.75 5.25a.75.75 0 01.75-.75H9a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H7.5a.75.75 0 01-.75-.75V5.25zm7.5 0a.75.75 0 01.75-.75h1.5a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75h-1.5a.75.75 0 01-.75-.75V5.25z" clipRule="evenodd" />
+                                                            </svg>
+                                                        ) : (
+                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                                                                <path fillRule="evenodd" d="M4.5 5.653c0-1.426 1.798-2.324 3.067-1.638l11.54 6.348c1.352.742 1.352 2.53 0 3.272L7.567 21.983a2.25 2.25 0 01-3.067-1.638V5.653z" clipRule="evenodd" />
+                                                            </svg>
+                                                        )}
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() => handleRemoveSong(index)}
+                                                    className="p-2 rounded-full bg-red-500 text-white hover:bg-red-600 transition duration-200 flex items-center justify-center"
+                                                    title="Remove Song"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                                                        <path fillRule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.233 1.488l-.M6.75 1.5A.75.75 0 017.5 0h9a.75.75 0 01.75.75V3a.75.75 0 01-.75.75h-.22754a.75.75 0 01-.75-.75V1.5h-.001a.75.75 0 01-1.5 0v.001h-2a.75.75 0 01-1.5 0h-2a.75.75 0 01-1.5 0h-2.001a.75.75 0 01-1.5 0h-2.22754V3.75c0-.414-.336-.75-.75-.75zM12 2.25a.75.75 0 01.75.75v.001h-1.5V3a.75.75 0 01.75-.75zm4.5 3a.75.75 0 01.75-.75h1.5a.75.75 0 01.75.75v.227a48.816 48.816 0 013.878.512.75.75 0 11-.233 1.488l-9.043 1.432-1.226 5.864-1.485.495a.75.75 0 01-.75-.75v-9a.75.75 0 01.75-.75zm-6.002 0c-.75 0-1.5.75-1.5 1.5v12c0 1.5.75 2.25 1.5 2.25h9c.75 0 1.5-.75 1.5-1.5V6.75c0-.75-.75-1.5-1.5-1.5H6.002z" clipRule="evenodd" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex justify-between gap-4 mt-6 flex-wrap">
+                                    <button
+                                        onClick={() => { setView('input'); stopPreview(); }}
+                                        className="flex-1 min-w-[48%] bg-gray-600 text-white font-semibold py-3 px-6 rounded-full shadow-lg hover:bg-gray-700 transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-gray-600 focus:ring-opacity-50"
+                                    >
+                                        Back to Input
+                                    </button>
+                                    <button
+                                        onClick={handleCreatePlaylist}
+                                        className="flex-1 min-w-[48%] bg-[#1DB954] text-white font-semibold py-3 px-6 rounded-full shadow-lg hover:bg-[#1ed760] transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[#1DB954] focus:ring-opacity-50"
+                                        disabled={loading || parsedSongs.filter(s => s.selectedTrack).length === 0} // Disable if no tracks are selected
+                                    >
+                                        {loading ? (
+                                            <span className="flex items-center justify-center">
+                                                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Creating Playlist...
+                                            </span>
+                                        ) : 'Create Playlist'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Created View: Confirmation after playlist creation */}
+                        {view === 'created' && (
+                            <div className="text-center space-y-6">
+                                <h2 className="text-3xl font-bold text-[#1DB954] mb-4">
+                                    Playlist Created Successfully!
+                                </h2>
+                                <p className="text-lg text-gray-300">
+                                    Your playlist "<span className="font-semibold">{newPlaylistUrl ? '' : playlistTitle}</span>" has been added to Spotify.
+                                </p>
+                                {newPlaylistUrl && (
+                                    <a
+                                        href={newPlaylistUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-block bg-[#1DB954] text-white font-semibold py-3 px-8 rounded-full shadow-lg hover:bg-[#1ed760] transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[#1DB954] focus:ring-opacity-50"
+                                    >
+                                        Open Playlist on Spotify
+                                    </a>
+                                )}
+                                <button
+                                    onClick={resetApp}
+                                    className="block mx-auto mt-8 bg-gray-600 text-white font-semibold py-3 px-8 rounded-full shadow-lg hover:bg-gray-700 transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-gray-600 focus:ring-opacity-50"
+                                >
+                                    Create Another Playlist
+                                </button>
+                            </div>
+                        )}
+                        {/* Auth Pending View: During Spotify OAuth callback processing */}
+                         {view === 'auth_pending' && (
+                            <div className="text-center space-y-4">
+                                <svg className="animate-spin h-10 w-10 text-[#1DB954] mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <p className="text-lg text-gray-300">
+                                    Finalizing Spotify login...
+                                </p>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// Render the App component into the root DOM element
+// ReactDOM is available globally
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
