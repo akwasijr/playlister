@@ -342,7 +342,8 @@
             // Check for auth token in URL
             const hash = window.location.hash;
             if (hash) {
-                const token = hash.split('&')[0].split('=')[1];
+                const params = new URLSearchParams(hash.substring(1));
+                const token = params.get('access_token');
                 if (token) {
                     accessToken = token;
                     getUserProfile(token);
